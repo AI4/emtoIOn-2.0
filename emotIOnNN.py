@@ -106,7 +106,7 @@ The following functions are for plotting different resuts from the model.
 #plt.figure(3)
 #for times in range(100):
 #    if np.argmax(predictions[times]) == Ytest[times]:
-#        plt.plot(times, (Y[times]), 'go')
+#        plt.plot(times, (Ytest[times]), 'go')
 #    else:
 #        plt.plot(times, np.argmax(predictions[times]), 'rx')
 #        plt.plot(times, ((Ytest[times])), 'bo')
