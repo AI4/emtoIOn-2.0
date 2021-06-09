@@ -19,11 +19,14 @@ This file can also be used for online predictions with trained models. Uncomment
 
 import tensorflow as tf                                                         #Import needed libraries
 from tensorflow import keras                                                    #Machine learning
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, LSTM #, CuDNNLSTM    #add CuDNNLSTM to run in GPU
 import numpy as np                                                              #Array handling
 import matplotlib.pyplot as plt                                                 #Plotting
 import socket                                                                   #UDP Communication
 import time
 import re
+from customFunc import inputRawData
 
 #this section is only used for live predicting sessions. UDP communication with terMITe is established.
 #UDP_IP = "192.168.0.23" #Specify IP Address for communication.
@@ -34,69 +37,17 @@ import re
 #sock.bind((UDP_IP, UDP_PORT))
 
 
-nepochs=int(input("Number of epochs: "))
-
 ## TRAINING DATA INPUT
-print("TRAINING DATA SELECTION:")
-usernum = input("User number: ")
-daynum = input("Day number: ")
-
-a = np.loadtxt(open("../Raw Data Files/User " + usernum + "/emotIOn_U" + usernum + "_D" + daynum + ".csv"), delimiter = ",", skiprows = 1) #Take Data from file on src path.
-
-addmore = True
-
-while addmore:
-    noans = True
-    cont = "y"
-    while noans:
-        cont = input("Add more data to the training matrix? [y/n]: ")
-        if cont[0] == "y" or cont[0] == "Y" or cont[0] == "n" or cont[0] == "N":
-            noans = False
-            if cont[0] == "n" or cont[0] == "N":
-                addmore = False
-        else:
-            print("Invalid answer. Try again.")
-    if addmore == False:
-        continue
-    usernum = input("User number: ")
-    daynum = input("Day number: ")
-    a1 = np.loadtxt(open("../Raw Data Files/User " + usernum + "/emotIOn_U" + usernum + "_D" + daynum + ".csv"), delimiter = ",", skiprows = 1) #Take Data from file on src path.
-    a0 = a
-    a = np.concatenate((a0, a1))
+a = inputRawData("TRAINING DATA SELECTION:", "training matrix")
 
 ## TEST DATA INPUT
-print("TEST DATA SELECTION:")
-usernum = input("User number: ")
-daynum = input("Day number: ")
+b = inputRawData("TEST DATA SELECTION:", "testing matrix")
 
-b = np.loadtxt(open("../Raw Data Files/User " + usernum + "/emotIOn_U" + usernum + "_D" + daynum + ".csv"), delimiter = ",", skiprows = 1) #Take Data from file on src path.
-
-addmore = True
-
-while addmore:
-    noans = True
-    cont = "y"
-    while noans:
-        cont = input("Add more data to the testing matrix? [y/n]: ")
-        if cont[0] == "y" or cont[0] == "Y" or cont[0] == "n" or cont[0] == "N":
-            noans = False
-            if cont[0] == "n" or cont[0] == "N":
-                addmore = False
-        else:
-            print("Invalid answer. Try again.")
-    if addmore == False:
-        continue
-    usernum = input("User number: ")
-    daynum = input("Day number: ")
-    b1 = np.loadtxt(open("../Raw Data Files/User " + usernum + "/emotIOn_U" + usernum + "_D" + daynum + ".csv"), delimiter = ",", skiprows = 1) #Take Data from file on src path.
-    b0 = b
-    b = np.concatenate((b0, b1))
-
-
+'''
 for i in range(50): #Range 50
     np.random.shuffle(a) #Shuffle Data Set
     np.random.shuffle(b) #Shuffle Data Set
-
+'''
 #index = int(round(a.shape[0] * .7)) #Divide set into training (70%) and test (30%)
 
 ## TRAINING VECTORS
@@ -109,30 +60,53 @@ Xtest = b[:,0:6] #Create X matrix for testing.
 Ytest = b[:,10] #Create Y vector for testing.
 Ytest = Ytest - 1 #Adjust values of Y vector.
 
-class_names = ['N', 'HH', 'LH', 'LL', 'HL'] #label to know different classes of affetive states within circumplex model of affect.
+class_names = ['N', 'HH', 'LH', 'LL', 'HL'] #label to know different classes of affetive states with$
 
-model = keras.Sequential([ #Declare a secuential Feed Forward Neural Network With Keras.
+X = np.reshape(X, (X.shape[0], 1, X.shape[1]))
+Xtest = np.reshape(Xtest, (Xtest.shape[0], 1, Xtest.shape[1]))
 
-    keras.layers.Dense(200,input_dim = X.shape[1], activation = 'sigmoid'), #input layer for the model. Takes input with six variables coming from terMITe. Adjust input_dim to add more sensors.
-    #Hidden layers sequence. Each layer has 200 neurons with activation fucntion relu on every one of them .
-    keras.layers.Dense(200, activation=tf.nn.sigmoid, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=None, kernel_constraint=None, bias_constraint=None),
-    keras.layers.Dense(200, activation=tf.nn.sigmoid, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=None, kernel_constraint=None, bias_constraint=None),
-    keras.layers.Dense(200, activation=tf.nn.sigmoid, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=None, kernel_constraint=None, bias_constraint=None),
-    #Output layer has 5 neurons for each one of the five affective states. Output vector contains probabilities of classification.
-    keras.layers.Dense(5, activation=tf.nn.softmax, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=None, kernel_constraint=None, bias_constraint=None)
+#Begin sequential model.
+model = Sequential()
 
-])
+#First layer of model LSTM. input shape expects input of the size of each X instance.
 
-model.compile(optimizer='rmsprop', #Uses root mean squared error for optimization.
-              loss='sparse_categorical_crossentropy', # soarse categorical cross entropy is used as loss function.
-              metrics=['accuracy'])
+model.add(LSTM(256, input_shape=(1, X.shape[2]), activation='relu', return_sequences=True))
+model.add(Dropout(0.2))
 
-history = model.fit(X, Y, validation_split = 0.33, batch_size = 500, epochs=nepochs) #Epochs 60, 1000 Training can be done with different combinations of epochs depending on the data set used.
+model.add(LSTM(256, activation = 'relu')) #Uncomment to run on CPU
+model.add(Dropout(0.2))
+
+#Feeds LSTM results into Dense layers for classification.
+model.add(Dense(500, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(Dense(500, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(Dense(500, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(Dense(5, activation='softmax')) #Only One output Unit
+
+#Declare optimizing fucntion and parameters.
+opt = tf.keras.optimizers.Adam(lr=0.001, decay=1e-6)
+
+#Compile model
+model.compile(
+    loss='sparse_categorical_crossentropy',
+    optimizer=opt,
+    metrics=['accuracy'],
+)
+
+#Fit model and store into history variable.
+history = model.fit(X, Y, epochs=100,  batch_size = 128, validation_split=0.30)
+
 print(history.history.keys()) #terminal outout of accuracy results.
 
 test_loss, test_acc = model.evaluate(Xtest, Ytest) #Evaluate model with test sets (X and Y).
 
 print('Test accuracy:', test_acc) #Terminal print of final accuracy of model.
+
 
 predictions = model.predict(Xtest) #Uses test set to predict.
 
@@ -176,6 +150,7 @@ for times in range(100):
     plt.title('Prediction Space')
     plt.legend()
 plt.show()
+
 '''
 while True:
     data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
@@ -186,3 +161,4 @@ while True:
     print class_names[np.argmax(prediction[0])]
     time.sleep(60)
 '''
+
