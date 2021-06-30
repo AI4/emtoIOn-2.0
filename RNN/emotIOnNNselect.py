@@ -77,6 +77,12 @@ model.add(LSTM(256, activation = 'relu')) #Uncomment to run on CPU
 model.add(Dropout(0.2))
 
 #Feeds LSTM results into Dense layers for classification.
+model.add(Dense(500, activation='sigmoid'))
+model.add(Dropout(0.2))
+
+model.add(Dense(500, activation='sigmoid'))
+model.add(Dropout(0.2))
+
 model.add(Dense(500, activation='relu'))
 model.add(Dropout(0.2))
 
@@ -99,7 +105,7 @@ model.compile(
 )
 
 #Fit model and store into history variable.
-history = model.fit(X, Y, epochs=100,  batch_size = 128, validation_split=0.30)
+history = model.fit(X, Y, epochs=300,  batch_size = 128, validation_data=(Xtest, Ytest))
 
 print(history.history.keys()) #terminal outout of accuracy results.
 
